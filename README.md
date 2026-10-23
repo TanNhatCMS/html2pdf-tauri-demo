@@ -67,6 +67,16 @@ scripts/                  prepare-resources.sh, build-tools.sh
 samples/hoadon/           Bộ hoá đơn mẫu để thử (không commit nội dung)
 ```
 
+## Build bản cài ở máy dev
+
+Chạy `bash scripts/prepare-resources.sh` (build Next standalone + staging
+bun sidecar) TRƯỚC, rồi mới `bun x @tauri-apps/cli build` — cấu hình Tauri
+cố ý KHÔNG dùng `beforeBuildCommand` nữa: Tauri chạy lệnh đó từ thư mục gốc
+repo chứ không phải `src-tauri/` nên đường dẫn `../scripts/...` vỡ trên CI
+cả 3 hệ (đây là nguyên nhân fail vòng v1.0.1, không phải icon — icon RGB là
+lỗi riêng của vòng v1.0.0). CI đã có bước prepare riêng nên không cần
+beforeBuildCommand.
+
 ## Chạy thử từng phần (không cần build Tauri)
 
 ```bash

@@ -31,7 +31,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.15"
+          python-version: "3.12"
 
       - name: Build invoice-pdf (Bun compile)
         shell: bash
@@ -47,9 +47,9 @@ jobs:
           fi
 
       # Windows: WeasyPrint can GTK/Pango DLL — cai qua MSYS2 truoc khi freeze.
-      # Buoc nay de continue-on-error: freeze Windows la phan kho nhat cua
-      # pipeline; neu hong, ban Release van co invoice-pdf + ban Linux/macOS,
-      # va app se bao loi tai cong cu ro rang thay vi chet im lang.
+      # Co y KHONG de continue-on-error: vong v1.0.1 cho thay freeze Windows
+      # hong am tham khien release thieu weasyprint .exe ma job van xanh.
+      # Tu nay hong la do CI ngay, kem buoc kiem chung PATH sach o duoi.
       - name: (Windows) Cai GTK/Pango qua MSYS2 cho WeasyPrint
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -61,7 +61,6 @@ jobs:
 
       - name: Freeze WeasyPrint (PyInstaller)
         shell: bash
-        continue-on-error: ${{ runner.os == 'Windows' }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then export PATH="/c/msys64/mingw64/bin:$PATH"; fi
           if [ "$RUNNER_OS" = "macOS" ]; then brew install pango cairo gdk-pixbuf libffi || true; fi
@@ -71,6 +70,19 @@ jobs:
              "dist-tools/weasyprint-${{ matrix.triple }}${{ matrix.ext }}" 2>/dev/null \
           || cp tools/weasyprint-freeze/dist/weasyprint \
              "dist-tools/weasyprint-${{ matrix.triple }}${{ matrix.ext }}"
+
+      - name: Kiem chung weasyprint exe (PATH sach, nhu may nguoi dung)
+        shell: bash
+        run: |
+          f="dist-tools/weasyprint-${{ matrix.triple }}${{ matrix.ext }}"
+          ls -lh "$f"
+          # PATH chi con thu muc he thong: neu exe con phu thuoc DLL GTK ngoai
+          # (chua duoc dong vao onefile) thi buoc nay se do ngay tai CI.
+          CLEAN_PATH="/c/Windows/System32:/c/Windows"
+          PATH="$CLEAN_PATH" "$f" --version
+          printf '<html><body><h1>test</h1><table><tr><td>1</td></tr></table></body></html>' > /tmp/t.html
+          PATH="$CLEAN_PATH" "$f" /tmp/t.html /tmp/t.pdf
+          ls -lh /tmp/t.pdf
 
       - name: Tao file .sha256
         shell: python

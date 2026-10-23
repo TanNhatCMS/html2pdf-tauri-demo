@@ -4,8 +4,7 @@
   "version": "1.0.0",
   "identifier": "io.vn.tannhatcms.html2pdf-demo",
   "build": {
-    "frontendDist": "./empty-frontend",
-    "beforeBuildCommand": "bash ../scripts/prepare-resources.sh"
+    "frontendDist": "./empty-frontend"
   },
   "app": {
     "windows": [],
