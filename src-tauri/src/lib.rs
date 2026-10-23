@@ -158,7 +158,7 @@ async fn download_verified(
     }
     f.flush().await.ok();
     drop(f);
-    let got = format!("{:x}", hasher.finalize());
+    let got: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     if got != expected {
         let _ = tokio::fs::remove_file(&tmp).await;
         return Err(format!(
