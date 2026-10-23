@@ -136,7 +136,7 @@ jobs:
           merge-multiple: true
           path: dist-tools
       - name: Gan 2 exe cong cu + sha256 vao Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: tools-v1.0.0
           name: "Tools v1.0.0 (invoice-pdf + weasyprint)"
