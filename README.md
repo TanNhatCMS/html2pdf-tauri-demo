@@ -90,7 +90,7 @@ tools/invoice-pdf/binaries/invoice-pdf-* samples/hoadon /tmp/out.pdf \
    tag bản app (vd `v1.0.1`), job `publish-tools` của CI tự tạo release
    công khai `tools-v1.0.0` và gắn `invoice-pdf-<triple>[.exe]`,
    `weasyprint-<triple>[.exe]` + `.sha256` của cả 3 hệ vào đó.
-2. Push tag bản app: workflow Release build Tauri cho Windows/Linux/macOS
+2. Push tag bản app: workflow Release build Tauri cho Windows (user chốt 2026-10-24 chỉ build Windows; muốn mở lại Linux/macOS thì thêm entry vào matrix của job `tools`/`app` trong release.yml)
    và tạo Release **draft** (kèm bộ cài) để duyệt trước khi công khai.
    Release công cụ ở bước 1 là public ngay vì app cần tải ẩn danh.
 

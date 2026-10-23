@@ -15,6 +15,8 @@ permissions:
 
 jobs:
   tools:
+    # Chi build Windows (user chot 2026-10-24). Muon mo lai Linux/macOS thi
+    # them entry vao matrix include ben duoi nhu truoc.
     strategy:
       fail-fast: false
       matrix:
@@ -23,14 +25,6 @@ jobs:
             triple: x86_64-pc-windows-msvc
             ext: .exe
             bun_target: bun-windows-x64
-          - os: ubuntu-latest
-            triple: x86_64-unknown-linux-gnu
-            ext: ""
-            bun_target: bun-linux-x64
-          - os: macos-14
-            triple: aarch64-apple-darwin
-            ext: ""
-            bun_target: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -98,18 +92,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-14]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
-      - name: (Ubuntu) Cai thu vien he thong cho Tauri
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libsoup-3.0-dev libxdo-dev
       - name: Cai phu thuoc FE
         shell: bash
         working-directory: apps/web
