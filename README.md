@@ -85,13 +85,19 @@ tools/invoice-pdf/binaries/invoice-pdf-* samples/hoadon /tmp/out.pdf \
 
 ## Phát hành
 
-1. Đổi `RELEASE_BASE` trong `src-tauri/src/lib.rs` trỏ đúng repo/tag chứa
-   asset công cụ; tạo tag công cụ (vd `tools-v1.0.0`) và upload
-   `invoice-pdf-<triple>[.exe]`, `weasyprint-<triple>[.exe]` + `.sha256`
-   (sinh bằng `scripts/build-tools.sh` trên từng OS, hoặc job `tools` của CI).
-2. Push tag bản app (vd `v1.0.0`): workflow Release build Tauri cho
-   Windows/Linux/macOS, tạo Release draft kèm bộ cài, job `publish-tools`
-   gắn 2 exe + sha256 vào cùng Release.
+1. `RELEASE_BASE` trong `src-tauri/src/lib.rs` đã trỏ sẵn tới release
+   `tools-v1.0.0` của repo này. Không cần tạo tag công cụ thủ công: khi push
+   tag bản app (vd `v1.0.1`), job `publish-tools` của CI tự tạo release
+   công khai `tools-v1.0.0` và gắn `invoice-pdf-<triple>[.exe]`,
+   `weasyprint-<triple>[.exe]` + `.sha256` của cả 3 hệ vào đó.
+2. Push tag bản app: workflow Release build Tauri cho Windows/Linux/macOS
+   và tạo Release **draft** (kèm bộ cài) để duyệt trước khi công khai.
+   Release công cụ ở bước 1 là public ngay vì app cần tải ẩn danh.
+
+Lưu ý icon: Tauri bắt buộc icon nguồn phải là **RGBA** — bản v1.0.0 fail cả
+3 hệ ở `generate_context!` chỉ vì icon.png ban đầu là RGB. Bộ icon chuẩn
+(32/128/256 + .icns + .ico) đã sinh bằng `tauri icon` từ icon.png RGBA
+1024×1024 và commit sẵn trong `src-tauri/icons/`.
 
 ## Trạng thái kiểm chứng (2026-10-23, máy phát triển Linux)
 
@@ -103,6 +109,6 @@ tools/invoice-pdf/binaries/invoice-pdf-* samples/hoadon /tmp/out.pdf \
 | invoice-pdf exe (Bun compile) `--ping` + chuyển PDF | ✅ |
 | weasyprint freeze (PyInstaller, Linux) + chuỗi 2 exe | ✅ PDF 1 trang A4, đúng tổng tiền |
 | `scripts/prepare-resources.sh` | ✅ chạy thật trên máy này |
-| src-tauri (`cargo build`) | ⚠️ chưa build tại đây: VM thiếu webkit2gtk-4.1; mã đã qua rustfmt parse. CI (job app) là nơi build thật |
-| GitHub Actions workflow | ⚠️ YAML hợp lệ, chưa chạy trên GitHub |
+| src-tauri (`cargo build`) | ✅ đã cài webkit2gtk-4.1-dev lên VM (đường .deb) và build thật: `cargo check` sạch + `cargo build` link thành công ra binary |
+| GitHub Actions workflow | ⚠️ Đã chạy với tag v1.0.0: 3 job tools ✅; 3 job app fail vì icon RGB (đã sửa — chờ tag mới chạy lại) |
 | Freeze weasyprint cho Windows | ⚠️ scaffold trong CI, chưa đối chứng máy Windows |

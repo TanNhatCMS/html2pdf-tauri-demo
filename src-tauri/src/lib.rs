@@ -124,7 +124,7 @@ async fn download_verified(
         .to_lowercase();
 
     // 2) tai file chinh, vua tai vua bam SHA-256, bao tien do ve FE
-    let mut resp = client
+    let resp = client
         .get(url)
         .send()
         .await
