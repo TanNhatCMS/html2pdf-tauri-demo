@@ -31,7 +31,7 @@ use tokio::io::AsyncWriteExt;
 // dat ten: invoice-pdf-<triple>[.exe], weasyprint-<triple>[.exe] + moi file
 // kem mot file <ten>.sha256 (noi dung: "<hex>  <ten file>").
 const RELEASE_BASE: &str =
-    "https://github.com/TanNhatCMS/tauri-next-weasy-demo/releases/download/tools-v1.0.0";
+    "https://github.com/TanNhatCMS/html2pdf-tauri-demo/releases/download/tools-v1.0.0";
 const PORT_RANGE: std::ops::RangeInclusive<u16> = 49300..=49499; // dai dynamic IANA 49152-65535
 
 struct AppState {
