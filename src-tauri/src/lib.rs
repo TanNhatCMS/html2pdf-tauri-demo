@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use rand::RngCore;
+use rand::Rng;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -74,7 +74,7 @@ fn exe_name(base: &str) -> String {
 
 fn gen_token() -> String {
     let mut buf = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut buf);
+    rand::rng().fill_bytes(&mut buf);
     buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -84,7 +84,7 @@ fn gen_token() -> String {
 /// bao la: bind-test o day + health-check sau khi spawn, thua thi thu port
 /// khac (xem start_next_server).
 fn pick_free_port() -> Option<u16> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let span = (PORT_RANGE.end() - PORT_RANGE.start() + 1) as u32;
     let offset = (rng.next_u32() % span) as u16;
     for i in 0..span as u16 {
