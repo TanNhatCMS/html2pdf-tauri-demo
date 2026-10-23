@@ -1,0 +1,27 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Quyền cho cửa sổ chính: FE phục vụ từ http://127.0.0.1:<port> nên cần remote urls để dùng IPC",
+  "windows": ["main"],
+  "remote": { "urls": ["http://127.0.0.1:*"] },
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "binaries/bun", "sidecar": true }]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "binaries/bun", "sidecar": true },
+        { "name": "invoice-pdf", "sidecar": false, "args": true }
+      ]
+    },
+    "shell:allow-kill",
+    "dialog:allow-open",
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "$HOME/**" }]
+    }
+  ]
+}

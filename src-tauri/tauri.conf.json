@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HTML to PDF Demo",
+  "version": "1.0.0",
+  "identifier": "io.vn.tannhatcms.html2pdf-demo",
+  "build": {
+    "frontendDist": "./empty-frontend",
+    "beforeBuildCommand": "bash ../scripts/prepare-resources.sh"
+  },
+  "app": {
+    "windows": [],
+    "security": { "csp": null },
+    "withGlobalTauri": false
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "externalBin": ["binaries/bun"],
+    "resources": { "resources/web/standalone/": "web/standalone/" }
+  }
+}

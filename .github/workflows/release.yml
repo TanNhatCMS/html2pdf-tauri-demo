@@ -1,0 +1,146 @@
+# Phat hanh: chay khi day tag v* (vi du v1.0.0)
+# - job tools: build 2 exe cong cu (invoice-pdf bang Bun compile, weasyprint
+#   freeze bang PyInstaller) cho tung OS + file .sha256
+# - job app: build Tauri (kem bun runtime sidecar + Next standalone resources)
+# - job publish-tools: gan 2 exe + sha256 vao cung ban Release de app tai
+#   online o lan chay dau (RELEASE_BASE trong src-tauri/src/lib.rs)
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  tools:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            triple: x86_64-pc-windows-msvc
+            ext: .exe
+            bun_target: bun-windows-x64
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+            ext: ""
+            bun_target: bun-linux-x64
+          - os: macos-14
+            triple: aarch64-apple-darwin
+            ext: ""
+            bun_target: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build invoice-pdf (Bun compile)
+        shell: bash
+        working-directory: tools/invoice-pdf
+        run: |
+          bun install
+          if [ -n "${{ matrix.bun_target }}" ]; then
+            bun build src/cli.mjs --compile --target=${{ matrix.bun_target }} \
+              --outfile "$GITHUB_WORKSPACE/dist-tools/invoice-pdf-${{ matrix.triple }}${{ matrix.ext }}"
+          else
+            bun build src/cli.mjs --compile \
+              --outfile "$GITHUB_WORKSPACE/dist-tools/invoice-pdf-${{ matrix.triple }}${{ matrix.ext }}"
+          fi
+
+      # Windows: WeasyPrint can GTK/Pango DLL — cai qua MSYS2 truoc khi freeze.
+      # Buoc nay de continue-on-error: freeze Windows la phan kho nhat cua
+      # pipeline; neu hong, ban Release van co invoice-pdf + ban Linux/macOS,
+      # va app se bao loi tai cong cu ro rang thay vi chet im lang.
+      - name: (Windows) Cai GTK/Pango qua MSYS2 cho WeasyPrint
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-pango mingw-w64-x86_64-cairo
+            mingw-w64-x86_64-gdk-pixbuf2 mingw-w64-x86_64-libffi
+
+      - name: Freeze WeasyPrint (PyInstaller)
+        shell: bash
+        continue-on-error: ${{ runner.os == 'Windows' }}
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then export PATH="/c/msys64/mingw64/bin:$PATH"; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install pango cairo gdk-pixbuf libffi || true; fi
+          bash tools/weasyprint-freeze/build.sh
+          mkdir -p dist-tools
+          cp "tools/weasyprint-freeze/dist/weasyprint${{ matrix.ext }}" \
+             "dist-tools/weasyprint-${{ matrix.triple }}${{ matrix.ext }}" 2>/dev/null \
+          || cp tools/weasyprint-freeze/dist/weasyprint \
+             "dist-tools/weasyprint-${{ matrix.triple }}${{ matrix.ext }}"
+
+      - name: Tao file .sha256
+        shell: python
+        run: |
+          import hashlib, glob, os
+          for f in glob.glob('dist-tools/*'):
+              if f.endswith('.sha256'): continue
+              h = hashlib.sha256(open(f, 'rb').read()).hexdigest()
+              open(f + '.sha256', 'w').write(f"{h}  {os.path.basename(f)}\n")
+              print(f, h)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tools-${{ matrix.triple }}
+          path: dist-tools/*
+          if-no-files-found: warn
+
+  app:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - name: (Ubuntu) Cai thu vien he thong cho Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libsoup-3.0-dev libxdo-dev
+      - name: Cai phu thuoc FE
+        shell: bash
+        working-directory: apps/web
+        run: bun install
+      - name: Sinh icon du dinh dang tu icon.png
+        shell: bash
+        run: bunx @tauri-apps/cli@2 icon src-tauri/icons/icon.png
+      - name: Chuan bi resources (Next standalone + bun sidecar)
+        shell: bash
+        run: bash scripts/prepare-resources.sh
+      - name: Build Tauri + dang Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "HTML to PDF Demo ${{ github.ref_name }}"
+          releaseDraft: true
+
+  publish-tools:
+    needs: tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tools-*
+          merge-multiple: true
+          path: dist-tools
+      - name: Gan 2 exe cong cu + sha256 vao Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: dist-tools/*
