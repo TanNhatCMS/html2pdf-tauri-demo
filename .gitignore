@@ -16,3 +16,6 @@ src-tauri/resources/web/standalone/
 src-tauri/gen/
 samples/*
 !samples/.gitkeep
+
+# Khong bao gio commit PDF (file mau / ket qua chuyen doi)
+*.pdf
