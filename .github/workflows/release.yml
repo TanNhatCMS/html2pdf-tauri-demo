@@ -52,6 +52,7 @@ jobs:
       # Tu nay hong la do CI ngay, kem buoc kiem chung PATH sach o duoi.
       - name: (Windows) Cai GTK/Pango qua MSYS2 cho WeasyPrint
         if: runner.os == 'Windows'
+        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -61,8 +62,12 @@ jobs:
 
       - name: Freeze WeasyPrint (PyInstaller)
         shell: bash
+        env:
+          # setup-msys2 khong cai mac dinh vao C:\msys64 ma vao thu muc tam
+          # cua runner — truyen dung vi tri that cho build.sh, dung doan
+          # /c/msys64 nua (do la ly do vong v1.0.3 fail nhanh o buoc nay).
+          MSYS2_LOCATION: ${{ steps.msys2.outputs['msys2-location'] }}
         run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then export PATH="/c/msys64/mingw64/bin:$PATH"; fi
           if [ "$RUNNER_OS" = "macOS" ]; then brew install pango cairo gdk-pixbuf libffi || true; fi
           bash tools/weasyprint-freeze/build.sh
           mkdir -p dist-tools
@@ -120,12 +125,32 @@ jobs:
       - name: Chuan bi resources (Next standalone + bun sidecar)
         shell: bash
         run: bash scripts/prepare-resources.sh
+      # Tim release user da tao truoc cho tag nay (neu co). tauri-action co
+      # input releaseId: khi co releaseId thi no CHI upload asset vao release
+      # do, khong tao moi, khong doi ten/body. De trong khi chua co release
+      # thi roi ve luong cu (tagName + releaseDraft: tao draft).
+      # Ly do bat buoc: o che do releaseDraft, tauri-action CHI tai su dung
+      # draft cu; gap release da publish thi no bao "NOT a draft" roi co tao
+      # moi va dap 422 (mot tag chi co mot release) — dung la truong hop
+      # release v1.0.3 user tao truoc bang tay. Draft release thi khong lay
+      # duoc qua API theo tag nen truong hop draft roi ve luong cu, va
+      # tauri-action se tu tim thay draft do trong danh sach release.
+      - name: Tim release theo tag
+        id: find-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id="$(gh api "repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" --jq .id 2>/dev/null || echo "")"
+          echo "release-id=$id" >> "$GITHUB_OUTPUT"
+          if [ -n "$id" ]; then echo "Dung release co san id=$id"; else echo "Chua co release cho tag — tauri-action se tao draft"; fi
       - name: Build Tauri + dang Release
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
+          releaseId: ${{ steps.find-release.outputs.release-id }}
           releaseName: "HTML to PDF Demo ${{ github.ref_name }}"
           releaseDraft: true
 

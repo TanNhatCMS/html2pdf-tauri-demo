@@ -12,13 +12,40 @@ pip install -q --upgrade pip weasyprint pyinstaller
 
 EXTRA=()
 MSYS_BIN=""
-for d in /c/msys64/mingw64/bin /msys64/mingw64/bin; do
-  [ -d "$d" ] && MSYS_BIN="$d" && break
-done
+MSYS_SRC="khong tim thay"
+# setup-msys2 KHONG cai mac dinh vao C:\msys64: neu khong truyen location,
+# action cai vao thu muc tam cua runner (vd D:\a\_temp\msys64) va tra ve qua
+# output msys2-location. Workflow phai truyen output do qua env MSYS2_LOCATION
+# (xem .github/workflows/release.yml). Vong v1.0.3 fail nhanh o buoc freeze
+# chinh vi ban cu chi thu /c/msys64 va /msys64, khong thay thi fail-loud.
+if [ -n "${MSYS2_LOCATION:-}" ]; then
+  loc="${MSYS2_LOCATION}"
+  if command -v cygpath >/dev/null 2>&1; then
+    loc="$(cygpath -u "$loc")"
+  else
+    case "$loc" in
+      [A-Za-z]:[\\/]*)
+        drive="$(printf '%s' "$loc" | cut -c1 | tr 'A-Z' 'a-z')"
+        rest="$(printf '%s' "$loc" | cut -c3- | tr '\\' '/')"
+        loc="/$drive$rest"
+        ;;
+    esac
+  fi
+  if [ -d "$loc/mingw64/bin" ]; then
+    MSYS_BIN="$loc/mingw64/bin"
+    MSYS_SRC="MSYS2_LOCATION=$MSYS2_LOCATION"
+  fi
+fi
+if [ -z "$MSYS_BIN" ]; then
+  for d in /c/msys64/mingw64/bin /msys64/mingw64/bin; do
+    [ -d "$d" ] && MSYS_BIN="$d" && MSYS_SRC="duong dan mac dinh $d" && break
+  done
+fi
+echo "MSYS2 mingw64/bin: ${MSYS_BIN:-<khong thay>} (nguon: $MSYS_SRC)"
 # Tren Windows ma khong thay MSYS2 mingw64 thi fail ngay tai day, dung de
 # freeze ra exe thieu DLL roi moi do o buoc kiem chung PATH sach.
 if [ -z "$MSYS_BIN" ] && { [ "${RUNNER_OS:-}" = "Windows" ] || uname -s | grep -qiE 'mingw|msys'; }; then
-  echo "LOI: khong tim thay MSYS2 mingw64/bin — khong the dong DLL GTK vao onefile" >&2
+  echo "LOI: khong tim thay MSYS2 mingw64/bin (da thu MSYS2_LOCATION, /c/msys64, /msys64) — khong the dong DLL GTK vao onefile" >&2
   exit 1
 fi
 if [ -n "$MSYS_BIN" ]; then
@@ -48,9 +75,17 @@ if [ -n "$MSYS_BIN" ]; then
   done
   # Bao dong phu thuoc de quy bang ldd: bat ca DLL doi ten theo version
   # (vd libffi-7/libffi-8, libintl-8/libintl-9) va DLL runtime ma danh sach
-  # co dinh co the sot trong tuong lai. Chi lay file nam trong mingw64/bin,
-  # bo qua DLL he thong Windows.
-  if command -v ldd >/dev/null 2>&1; then
+  # co dinh co the sot trong tuong lai. Giai quyet theo basename trong
+  # mingw64/bin (xem ghi chu trong vong lap duoi).
+  # Dung ldd cua chinh MSYS2 (<msys>/usr/bin/ldd) thay vi ldd cua Git Bash:
+  # hai bo MSYS2 nay co cay /mingw64 khac nhau, duong dan ldd in ra cua
+  # ben nay khong khop ben kia. Khong co thi dung ldd tren PATH.
+  LDD_BIN=""
+  # mingw64/bin/../../usr/bin/ldd = <msys>/usr/bin/ldd
+  [ -x "$MSYS_BIN/../../usr/bin/ldd" ] && LDD_BIN="$MSYS_BIN/../../usr/bin/ldd"
+  if [ -z "$LDD_BIN" ] && command -v ldd >/dev/null 2>&1; then LDD_BIN="ldd"; fi
+  echo "ldd: ${LDD_BIN:-<khong co>}"
+  if [ -n "$LDD_BIN" ]; then
     echo "Tinh bao dong DLL bang ldd tu cac DLL goc..."
     QUEUE="libpango-1.0-0.dll libpangocairo-1.0-0.dll libcairo-2.dll libfontconfig-1.dll libglib-2.0-0.dll libgobject-2.0-0.dll libgio-2.0-0.dll libgdk_pixbuf-2.0-0.dll"
     declare -A VISITED=()
@@ -61,18 +96,24 @@ if [ -n "$MSYS_BIN" ]; then
       [ -f "$MSYS_BIN/$cur" ] || continue
       while IFS= read -r line; do
         dep_path="$(printf '%s' "$line" | sed -n 's/.*=> *\([^ ]*\).*/\1/p')"
-        case "$dep_path" in
-          "$MSYS_BIN"/* | /c/msys64/mingw64/bin/* | /msys64/mingw64/bin/* | /mingw64/bin/*)
-            dep_name="$(basename "$dep_path")"
-            if [ -z "${SEEN["$dep_name"]:-}" ]; then
-              EXTRA+=(--add-binary "$dep_path;.")
-              SEEN["$dep_name"]=1
-              echo "  + ldd: $dep_name"
-            fi
-            [ -z "${VISITED["$dep_name"]:-}" ] && QUEUE="$QUEUE $dep_name"
-            ;;
-        esac
-      done < <(ldd "$MSYS_BIN/$cur" 2>/dev/null || true)
+        # Giai quyet theo BASENAME trong mingw64/bin, khong tin duong dan
+        # ldd in ra: ldd cua MSYS2 in /mingw64/bin/... (goc cua no), ldd cua
+        # Git Bash in duong dan cua Git — ca hai deu co the khac duong dan
+        # that cua MSYS_BIN. Chi can file cung ten co trong mingw64/bin thi
+        # lay ban cua MSYS_BIN; DLL he thong (KERNEL32...) khong co trong
+        # mingw64/bin nen tu bi loai.
+        dep_name="$(basename "$dep_path")"
+        if [ -n "$dep_name" ] && [ -f "$MSYS_BIN/$dep_name" ]; then
+          if [ -z "${SEEN["$dep_name"]:-}" ]; then
+            EXTRA+=(--add-binary "$MSYS_BIN/$dep_name;.")
+            SEEN["$dep_name"]=1
+            echo "  + ldd: $dep_name"
+          fi
+          if [ -z "${VISITED["$dep_name"]:-}" ]; then
+            QUEUE="$QUEUE $dep_name"
+          fi
+        fi
+      done < <("$LDD_BIN" "$MSYS_BIN/$cur" 2>/dev/null || true)
     done
   else
     echo "  (khong co ldd — chi dung danh sach co dinh)"
