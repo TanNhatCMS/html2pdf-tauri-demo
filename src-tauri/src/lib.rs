@@ -1,7 +1,10 @@
 //! HTML -> PDF Demo (Tauri 2)
 //! Kien truc:
-//! - FE Next.js chay tu thu muc standalone dong kem (resources/web/standalone),
-//!   do chinh bun runtime (sidecar dong goi san) spawn, nghe tren 127.0.0.1 o mot
+//! - FE Next.js chay tu BAN COPY cua standalone dong kem (resources/web/standalone)
+//!   sang app_local_data_dir/next-runtime/<BUILD_ID>, do chinh bun runtime
+//!   (sidecar dong goi san) spawn, nghe tren 127.0.0.1 o mot
+//!   (khong chay truc tiep tu thu muc cai dat: Next ghi cache runtime vao
+//!   .next/server/route-cache, ghi vao thu muc cai dat se sot lai sau uninstall).
 //!   port trong dai dynamic do Rust chon bang bind-test + xac minh health-check.
 //! - 2 exe cong cu (invoice-pdf + weasyprint) KHONG dong goi san: lan chay dau
 //!   app tai tu GitHub Release cua repo nay, kiem tra SHA-256, luu vao
@@ -215,21 +218,80 @@ async fn health_ok(port: u16, token: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Spawn bun runtime chay Next standalone; thu toi da 5 port khac nhau.
-async fn start_next_server(
-    app: &tauri::AppHandle,
-    token: &str,
-) -> Result<(u16, CommandChild), String> {
-    let standalone_dir = app
+/// Copy mot thu muc de quy (file + thu muc con). Symlink duoc copy theo
+/// noi dung file dich (fs::copy tu dong follow symlink).
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
+/// Chuan bi thu muc chay Next standalone.
+///
+/// LY DO: truoc day app spawn server truc tiep tu resource_dir (nam trong
+/// thu muc cai dat, vd AppData\Local\HTML to PDF Demo\web\standalone).
+/// Next 16 ghi cache runtime (.next/server/route-cache/APP_PAGE/...,
+/// index.segments) ngay trong thu muc do, ma trinh gỡ cai dat NSIS chi xoa
+/// file no da cai dat nen cay thu muc cache sot lai sau khi uninstall.
+/// Tu ban nay server chay tu ban copy trong app_local_data_dir (thu muc
+/// du lieu nguoi dung, noi app duoc phep ghi); thu muc cai dat khong bao
+/// gio bi ghi runtime nua nen uninstall se sach. Moi ban build co BUILD_ID
+/// rieng (Next sinh moi moi lan build) nen thu muc runtime dat theo
+/// BUILD_ID: doi build thi copy ban moi, ban cu khong bi xoa de tranh pha
+/// server cua instance dang chay; ban cu chi la app data, xoa tay duoc.
+/// Dong thoi xoa best-effort route-cache do ban cu de lai trong thu muc
+/// cai dat (neu ghi duoc) de uninstall cua ban nang cap sau nay cung sach.
+fn prepare_next_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let src = app
         .path()
         .resource_dir()
         .map_err(|e| e.to_string())?
         .join("web")
         .join("standalone");
-    let server_js = standalone_dir.join("server.js");
+    let server_js = src.join("server.js");
     if !server_js.exists() {
         return Err(format!("khong thay {}", server_js.display()));
     }
+    // Don route-cache do ban cu de lai trong thu muc cai dat (best-effort:
+    // thu muc cai dat dang read-only, vd cai per-machine, thi bo qua).
+    let _ = std::fs::remove_dir_all(src.join(".next").join("server").join("route-cache"));
+    let fingerprint = std::fs::read_to_string(src.join(".next").join("BUILD_ID"))
+        .map(|v| {
+            v.trim()
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+                .collect::<String>()
+        })
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|_| app.package_info().version.to_string());
+    let runtime = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("next-runtime")
+        .join(fingerprint);
+    if !runtime.join("server.js").exists() {
+        copy_dir_recursive(&src, &runtime).map_err(|e| format!("copy standalone: {e}"))?;
+    }
+    Ok(runtime)
+}
+
+/// Spawn bun runtime chay Next standalone; thu toi da 5 port khac nhau.
+async fn start_next_server(
+    app: &tauri::AppHandle,
+    token: &str,
+) -> Result<(u16, CommandChild), String> {
+    let standalone_dir = prepare_next_runtime_dir(app)?;
+    let server_js = standalone_dir.join("server.js");
     let mut last_err = String::new();
     for attempt in 0..5 {
         let port = pick_free_port().ok_or("khong chon duoc port trong")?;
