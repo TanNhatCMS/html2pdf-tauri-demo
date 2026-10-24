@@ -41,6 +41,26 @@ if [ -z "$MSYS_BIN" ]; then
     [ -d "$d" ] && MSYS_BIN="$d" && MSYS_SRC="duong dan mac dinh $d" && break
   done
 fi
+# PyInstaller la chuong trinh Windows: duong dan unix /d/a/... ma truyen
+# thang vao --add-binary se bi no hieu theo nghia Windows thanh
+# D:\d\a\... (o dia hien tai + toan bo duong dan) -> "Unable to find"
+# (vong v1.0.4 do dung o libglib-2.0-0.dll). Doi sang dang Windows that
+# (D:/a/...) truoc khi truyen; phia bash (kiem tra file, ldd) van dung
+# dang unix MSYS_BIN.
+MSYS_BIN_WIN=""
+if [ -n "$MSYS_BIN" ]; then
+  if command -v cygpath >/dev/null 2>&1; then
+    MSYS_BIN_WIN="$(cygpath -m "$MSYS_BIN")"
+  else
+    case "$MSYS_BIN" in
+      /[A-Za-z]/*)
+        drive="$(printf '%s' "$MSYS_BIN" | cut -c2 | tr 'a-z' 'A-Z')"
+        MSYS_BIN_WIN="$drive:$(printf '%s' "$MSYS_BIN" | cut -c3-)"
+        ;;
+      *) MSYS_BIN_WIN="$MSYS_BIN" ;;
+    esac
+  fi
+fi
 echo "MSYS2 mingw64/bin: ${MSYS_BIN:-<khong thay>} (nguon: $MSYS_SRC)"
 # Tren Windows ma khong thay MSYS2 mingw64 thi fail ngay tai day, dung de
 # freeze ra exe thieu DLL roi moi do o buoc kiem chung PATH sach.
@@ -67,7 +87,7 @@ if [ -n "$MSYS_BIN" ]; then
   declare -A SEEN=()
   for dll in $DLLS; do
     if [ -f "$MSYS_BIN/$dll" ]; then
-      EXTRA+=(--add-binary "$MSYS_BIN/$dll;.")
+      EXTRA+=(--add-binary "$MSYS_BIN_WIN/$dll;.")
       SEEN["$dll"]=1
     else
       echo "  (bo qua, khong co trong mingw64/bin: $dll)"
@@ -105,7 +125,7 @@ if [ -n "$MSYS_BIN" ]; then
         dep_name="$(basename "$dep_path")"
         if [ -n "$dep_name" ] && [ -f "$MSYS_BIN/$dep_name" ]; then
           if [ -z "${SEEN["$dep_name"]:-}" ]; then
-            EXTRA+=(--add-binary "$MSYS_BIN/$dep_name;.")
+            EXTRA+=(--add-binary "$MSYS_BIN_WIN/$dep_name;.")
             SEEN["$dep_name"]=1
             echo "  + ldd: $dep_name"
           fi
@@ -125,7 +145,10 @@ if [ -n "$MSYS_BIN" ]; then
   fi
 fi
 
-pyinstaller --noconfirm --onefile --name weasyprint \
+# Cho pyinstaller thay DLL GTK luc analysis (import weasyprint can
+# libgobject-2.0-0): neu khong, analysis bao WARNING "Failed to collect
+# submodules" (vong v1.0.4). PATH nay chi ap cho lenh pyinstaller.
+PATH="${MSYS_BIN:+$MSYS_BIN:}$PATH" pyinstaller --noconfirm --onefile --name weasyprint \
   --collect-all weasyprint --collect-all pydyf --collect-all fontTools \
   --collect-all pyphen --collect-all PIL \
   "${EXTRA[@]}" \

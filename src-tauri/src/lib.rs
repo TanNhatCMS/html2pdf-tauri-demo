@@ -271,6 +271,11 @@ fn prepare_next_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
                 .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
                 .collect::<String>()
         })
+        // Result khong co .filter (chi Option/Iterator co): doi sang Option
+        // bang .ok() truoc - doc file loi -> None -> fallback version,
+        // chuoi rong sau loc cung -> None -> fallback version.
+        // (CI v1.0.4 do E0599 dung o dong .filter nay.)
+        .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|_| app.package_info().version.to_string());
     let runtime = app
