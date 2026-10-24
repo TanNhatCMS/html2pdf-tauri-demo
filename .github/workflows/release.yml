@@ -74,6 +74,9 @@ jobs:
       - name: Kiem chung weasyprint exe (PATH sach, nhu may nguoi dung)
         shell: bash
         run: |
+          # set -x: vong v1.0.2 chi biet buoc fail chung chung (log chi tiet khoa
+          # sau dang nhap); bat echo lenh de lan sau thay ngay lenh nao gay.
+          set -x
           f="dist-tools/weasyprint-${{ matrix.triple }}${{ matrix.ext }}"
           ls -lh "$f"
           # PATH chi con thu muc he thong: neu exe con phu thuoc DLL GTK ngoai
