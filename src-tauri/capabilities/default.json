@@ -8,13 +8,16 @@
     "core:default",
     {
       "identifier": "shell:allow-spawn",
-      "allow": [{ "name": "binaries/bun", "sidecar": true }]
+      "allow": [
+        { "name": "binaries/bun", "sidecar": true },
+        { "name": "invoice-pdf", "cmd": "invoice-pdf", "sidecar": false, "args": true }
+      ]
     },
     {
       "identifier": "shell:allow-execute",
       "allow": [
         { "name": "binaries/bun", "sidecar": true },
-        { "name": "invoice-pdf", "sidecar": false, "args": true }
+        { "name": "invoice-pdf", "cmd": "invoice-pdf", "sidecar": false, "args": true }
       ]
     },
     "shell:allow-kill",
